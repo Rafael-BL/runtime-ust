@@ -1,9 +1,9 @@
-CFLAGS= -g -Wall -O0 
+CFLAGS= -g -O0 
 
 all: mutator mutatee
 
-mutator: mutator.c 
-	gcc $(CFLAGS) $^ -llttng-ust -llttng-ust-tracepoint -o $@
+mutator: mutator.cpp 
+	g++ $(CFLAGS)  $^ -llttng-ust -llttng-ust-tracepoint -o $@
 mutatee: mutatee.c
 	gcc $(CFLAGS) $^ -o $@
 clean:

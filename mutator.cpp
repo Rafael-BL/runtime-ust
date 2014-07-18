@@ -9,6 +9,9 @@
 #include <lttng/ringbuffer-config.h>
 
 #define NB_CHAMP 3
+extern "C" int tracepoint_register_lib(struct tracepoint * const *tracepoints_start, int nb);
+
+extern "C" {
 void add_int_event_field( struct lttng_event_field *field, char *name)
 {
 	struct lttng_event_field f = {
@@ -40,13 +43,13 @@ void add_char_event_field( struct lttng_event_field *field, char *name)
 
 	memcpy(field, &f, sizeof(struct lttng_event_field));
 }
-
+}
 void fake_probe(struct lttng_event* __tp_data)
 {}
 int main (int argc, const char* argv[]) 
 {
-	char *name = malloc(sizeof(char) *50);
-	char *sign = malloc(sizeof(char) *50);
+	char *name = (char*)malloc(sizeof(char) *50);
+	char *sign = (char*)malloc(sizeof(char) *50);
 	sprintf(name,"test:testevent");
 	sprintf(sign,"testevent");
 
@@ -56,9 +59,9 @@ int main (int argc, const char* argv[])
 	char champs2 = 'f';
 
 	char *nom_champs[NB_CHAMP];
-	nom_champs[0] = "int1";
-	nom_champs[1] = "float2";
-	nom_champs[2] = "char3";
+	nom_champs[0] =(char*) "int1";
+	nom_champs[1] =(char*) "float2";
+	nom_champs[2] =(char*) "char3";
 
 	int type[3];
 	type[0] = 0;
@@ -78,16 +81,16 @@ int main (int argc, const char* argv[])
 		.tracepoint_provider_ref = NULL,
 		.signature = sign,
 	};
-	struct tracepoint *tp = malloc(sizeof(struct tracepoint));
+	struct tracepoint *tp = (struct tracepoint*) malloc(sizeof(struct tracepoint));
 	memcpy(tp, &t, sizeof(struct tracepoint));
 
 	//const struct tracepoint *test_tracepoints[] = {&t};
-	struct tracepoint **test_tracepoint = malloc(sizeof(struct tracepoint*));
+	struct tracepoint **test_tracepoint = (struct tracepoint**) malloc(sizeof(struct tracepoint*));
 	test_tracepoint[0] = &t;
 	tracepoint_register_lib(test_tracepoint, NB_CHAMP);
 
 	//Event fields
-	struct lttng_event_field *event_fields = malloc(sizeof(struct lttng_event_field)*NB_CHAMP);
+	struct lttng_event_field *event_fields = (struct lttng_event_field* ) malloc(sizeof(struct lttng_event_field)*NB_CHAMP);
 	add_int_event_field(&event_fields[0], nom_champs[0]);
 	add_float_event_field(&event_fields[1], nom_champs[1]);
 	add_char_event_field(&event_fields[2], nom_champs[2]);
@@ -96,15 +99,16 @@ int main (int argc, const char* argv[])
 	struct lttng_event_desc event_desc_1 = {
 		.name = name,
 		.probe_callback = (void (*)()) fake_probe ,
-		.ctx = NULL ,
+		.ctx = NULL,
 		.fields = (const struct lttng_event_field *) event_fields,
 		.nr_fields = NB_CHAMP,
+		.loglevel = NULL,
 		.signature = sign,
 	};
-	struct lttng_event_desc *event_d = malloc(sizeof(struct lttng_event_desc));
+	struct lttng_event_desc *event_d = (struct lttng_event_desc *) malloc(sizeof(struct lttng_event_desc));
 	memcpy(event_d, &event_desc_1, sizeof(struct lttng_event_desc));
 
-	struct lttng_event_desc **event_desc = malloc(sizeof(struct lttng_event_desc *));
+	struct lttng_event_desc **event_desc = (struct lttng_event_desc **) malloc(sizeof(struct lttng_event_desc *));
 	//memcpy(event_desc[0], event_d, sizeof(struct lttng_event_desc));
 	event_desc[0] = event_d;
 	//probe description
@@ -119,7 +123,7 @@ int main (int argc, const char* argv[])
 		.minor = LTTNG_UST_PROVIDER_MINOR,
 	};
 
-	struct lttng_probe_desc *probe_desc = malloc(sizeof(struct lttng_probe_desc));
+	struct lttng_probe_desc *probe_desc = (struct lttng_probe_desc *) malloc(sizeof(struct lttng_probe_desc));
 	memcpy(probe_desc, &desc, sizeof(struct lttng_probe_desc));
 	lttng_probe_register(probe_desc);
 
