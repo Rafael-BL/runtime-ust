@@ -232,12 +232,13 @@ int main (int argc, const char* argv[])
 	args.push_back(new BPatch_constExpr( __event_len ));
 	BPatch_funcCallExpr init_ctx_fct_call(*(init_ctx_fct[0]), args);
 	call_sequence.push_back(&init_ctx_fct_call);
-	
+
 	args.clear();
 	BUCHE("\tIterate on every params and prepare the field write call expr");
 
 	for(int i = 0 ; i < nb_field ; ++i)
 	{
+		BUCHE("\t\tAdd call expr for param. %d named \"%s\"", i, (*params)[i]->getName());
 		args.push_back(new BPatch_constExpr(tpExpr->getBaseAddr()));
 		args.push_back(new BPatch_constExpr( __event_len ));
 		args.push_back(new BPatch_paramExpr(i));
