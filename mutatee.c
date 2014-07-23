@@ -37,7 +37,6 @@ void sherbrook(int a, char *b, char c, void *d)
 
 int main()
 {
-	BUCHE("allo");
 	int i, var = 18;
 	for(i = 0; i < 5; ++i)
 	{

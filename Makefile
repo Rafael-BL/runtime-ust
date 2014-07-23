@@ -18,7 +18,7 @@ run: all
 	lttng create
 	lttng enable-event -a -u
 	lttng start
-	env LTTNG_UST_DEBUG=1 DYNINSTAPI_RT_LIB=/usr/lib/libdyninstAPI_RT.so ./mutator
+	env LTTNG_UST_REGISTER_TIMEOUT=-1 DYNINSTAPI_RT_LIB=/usr/lib/libdyninstAPI_RT.so ./mutator
 	sleep 5
 	lttng stop
 	lttng view

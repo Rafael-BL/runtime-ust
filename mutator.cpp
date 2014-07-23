@@ -52,7 +52,7 @@ extern "C" {
 using namespace std;
 void register_tp_from_mutatee(BPatch_process *handle, BPatch_variableExpr *tp)
 {
-	BUCHE("a");
+	BUCHE("Registering tracepoint from mutatee");
 	vector<BPatch_function*> functions;
 	BPatch_image *image = handle->getImage();
 	std::vector<BPatch_snippet *> args;
@@ -65,7 +65,7 @@ void register_tp_from_mutatee(BPatch_process *handle, BPatch_variableExpr *tp)
 }
 void probe_register_from_mutatee(BPatch_process *handle, BPatch_variableExpr *probe)
 {
-	BUCHE("b");
+	BUCHE("Registering probe from mutatee");
 	vector<BPatch_function*> functions;
 	BPatch_image *image = handle->getImage();
 	std::vector<BPatch_snippet *> args;
@@ -76,38 +76,12 @@ void probe_register_from_mutatee(BPatch_process *handle, BPatch_variableExpr *pr
 	BPatch_funcCallExpr probe_register_call(*functions[0], args);
 	handle->oneTimeCodeAsync(probe_register_call);
 }
-void call_printf_from_mutatee(BPatch_process *handle)
-{
-	BPatch_image *image = handle->getImage();
-	vector<BPatch_function*> functions;
-	std::vector<BPatch_snippet *> args;
-	image->findFunction("printf", functions);
-	BPatch_snippet *fmt = new BPatch_constExpr("bonjour********\n");
-	args.push_back(fmt);
-	BPatch_funcCallExpr printfCall(*(functions[0]), args);
-	handle->oneTimeCodeAsync(printfCall);
-}
-void char_print_str(BPatch_process *handle, BPatch_snippet *var)
-{
-//	unsigned long addr = 0;
-//	var->readValue(&addr);
-//	printf("BA: %p\n", ((BPatch_constExpr*) var)->getBaseAddr());
-	BPatch_image *image = handle->getImage();
-	vector<BPatch_function*> functions;
-	std::vector<BPatch_snippet *> args;
-	image->findFunction("read_str", functions);
-//	image->findFunction("printf", functions);
-//	BPatch_snippet *fmt = new BPatch_constExpr("lol--->%s\n");
-//	args.push_back(fmt);
-	args.push_back(var);
 
-	BPatch_funcCallExpr call(*(functions[0]), args);
-	handle->oneTimeCode(call);
-
-}
 int main (int argc, const char* argv[])
 {
 	BPatch bpatch;
+	bpatch.setDebugParsing(false);
+	bpatch.setDelayedParsing(true);
 
 	//BPatch_process *handle = bpatch.processCreate("./mutatee", NULL );
 	int mutateePid = fork();
@@ -115,21 +89,23 @@ int main (int argc, const char* argv[])
     	if(mutateePid == 0)
     	{
 		char *args[4] = {NULL};
-		args[0] = (char *) "env";
-		args[1] = (char *) "LD_PRELOAD=/usr/local/lib/liblttng-ust.so";
-		args[2] = (char *) "./mutatee";
-		execvp("./mutatee", args);
+		char *envs[3] = {NULL};
+		//args[0] = (char *) "env";
+		envs[0] = (char *) "LD_PRELOAD=/usr/local/lib/liblttng-ust.so";
+		envs[1] = (char *) "HOME=/home/frdeso";
+		args[0] = (char *) "./mutatee";
+		execve("./mutatee", args, envs);
     	}
 
     	sleep(1);
+	BUCHE("Attaching to the mutatee process");
     	BPatch_process *handle = bpatch.processAttach(NULL, mutateePid);
 
-	BUCHE("a");
+	BUCHE("Loading library in mutatee addr. space");
 	handle->loadLibrary("./tp.so");
-	BUCHE("b");
 	handle->loadLibrary("/usr/local/lib/liblttng-ust.so");
-	BUCHE("c");
 	handle->stopExecution();
+
 	BPatch_image *image = handle->getImage();
 	vector<BPatch_function*> functions, tp_function;
 	image->findFunction("quebec", functions);
@@ -146,13 +122,10 @@ int main (int argc, const char* argv[])
 	char signArr[MAX_STR_LEN] = "event";
 	signExpr->writeValue((char *)signArr, MAX_STR_LEN, false);
 
-
 	BPatch_variableExpr *prvdrExpr = handle->malloc(sizeof(char) * MAX_STR_LEN);
 	char provArr[MAX_STR_LEN] = "p";
 	prvdrExpr->writeValue((char*)provArr, MAX_STR_LEN, false);
-	//char_print_str(handle, new BPatch_constExpr( prvdrExpr->getBaseAddr()));
 
-	BUCHE("b");
 	//Tracepoint
 	struct tracepoint t2= {
 		.name =(const char*) nameExpr->getBaseAddr(), //Does this work?
@@ -164,18 +137,15 @@ int main (int argc, const char* argv[])
 
 	BPatch_variableExpr *tpExpr = handle->malloc(sizeof(struct tracepoint));
 	tpExpr->writeValue((void *)&t2, sizeof(struct tracepoint), false);
-	BUCHE("baseaddres: %p", tpExpr->getBaseAddr());
-	//BPatch_variableExpr *tpArrayExpr = handle->malloc(sizeof(struct tracepoint*) * 1);
-//	unsigned long addr =(unsigned long) tpExpr->getBaseAddr();
-	//tpArrayExpr->writeValue(&addr);
 
 	register_tp_from_mutatee(handle, tpExpr);
+
 	//Event fields
 	struct lttng_event_field *event_fields = (struct lttng_event_field* ) malloc(sizeof(struct lttng_event_field)*nb_field);
 	BPatch_variableExpr *event_fieldsExpr = handle->malloc(sizeof(struct lttng_event_field) * nb_field);
 
 	int __event_len = 0;
-	BUCHE("d");
+	BUCHE("Generating event fields according to the function's params");
 	for(int i = 0;i < nb_field ; ++i)
 	{
 		BPatch_variableExpr* fieldNameExpr = handle->malloc(sizeof(char) *MAX_STR_LEN);
@@ -208,18 +178,12 @@ int main (int argc, const char* argv[])
 			}
 		}
 	}
-	printf("event len=%d\n", __event_len);
 	event_fieldsExpr->writeValue(event_fields, sizeof(struct lttng_event_field)*nb_field, false);
-	long name_ptr = 0, sign_ptr = 0;
-	BUCHE("e1");
-	//signExpr->readValue(&sign_ptr);
-	BUCHE("e2");
-//	nameExpr->readValue(&name_ptr);
-	BUCHE("e3");
+
 	//Event description
 	struct lttng_event_desc event_desc_1 = {
 		.name = (const char*) nameExpr->getBaseAddr(),
-		.probe_callback = (void (*)()) 111, //FIXME: with fake probe function in shared object
+		.probe_callback = (void (*)()) 1337, //FIXME: must set the probe callback to none null value but is not used
 		.ctx = NULL,
 		.fields = (const struct lttng_event_field *) event_fieldsExpr->getBaseAddr(),
 		.nr_fields = (unsigned int) nb_field,
@@ -232,12 +196,8 @@ int main (int argc, const char* argv[])
 
 	BPatch_variableExpr *event_descArrayExpr = handle->malloc(sizeof(struct lttng_event_desc*));
 	unsigned long addr =(unsigned long) event_descExpr->getBaseAddr();
-	BPatch_variableExpr *tmp = handle->malloc(1);
 	event_descArrayExpr->writeValue(&addr,  sizeof(struct lttng_event_desc*), false);
 
-	BUCHE("e");
-	long provider = 0;
-//	prvdrExpr->readValue(&provider);
 	//probe description
 	struct lttng_probe_desc desc = {
 		.provider = (const char*) prvdrExpr->getBaseAddr(),
@@ -249,35 +209,34 @@ int main (int argc, const char* argv[])
 		.major = LTTNG_UST_PROVIDER_MAJOR,
 		.minor = LTTNG_UST_PROVIDER_MINOR,
 	};
-	BUCHE("f");
-	BUCHE("e4");
 	BPatch_variableExpr *probe_descExpr = handle->malloc(sizeof(struct lttng_probe_desc));
-	BUCHE("g");
 	probe_descExpr->writeValue(&desc, sizeof(struct lttng_probe_desc), false);
 
-	BUCHE("h");
 	probe_register_from_mutatee(handle, probe_descExpr);
-	BUCHE("i");
 
+	BUCHE("Preparing arguments for tracepoint calling");
 	std::vector<BPatch_snippet *> args;
-
 	args.push_back(new BPatch_constExpr(tpExpr->getBaseAddr()));
 	args.push_back(new BPatch_constExpr( __event_len));
-	args.push_back(new BPatch_paramExpr(0));
+	for(int i = 0 ; i < nb_field ; ++i)
+	{
+		args.push_back(new BPatch_paramExpr(i));
+	}
+
+	//Find function that commits the event
 	image->findFunction("tp_int", tp_function);
 	BPatch_funcCallExpr tp_call(*(tp_function[0]), args);
 	vector<BPatch_point*> * points = functions[0]->findPoint(BPatch_entry);
+	BUCHE("Add tracepoint point function call in the mutatee");
 	handle->insertSnippet(tp_call, points[0]);
 
-	BUCHE("j");
 	if(handle->isStopped())
 	{
-		BUCHE("Continuing...");
+		BUCHE("Continuing mutatee...");
 		handle->continueExecution();
 	}
 	if(handle->isTerminated())
-		BUCHE("dead");
-	BUCHE("k");
+		BUCHE("Mutatee dead on arrival"); //the process is supposed to be in stopped state
 	while (!handle->isTerminated())
 		bpatch.waitForStatusChange();
 

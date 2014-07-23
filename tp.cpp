@@ -12,7 +12,6 @@ void fake_probe(struct lttng_event* __tp_data)
 
 void tp_int(struct tracepoint *t,int event_len, int value )
 {
-	BUCHE("in tp event_len=%d, val=%d",event_len, value);
 	void *__tp_data = t->probes->data;
 	struct lttng_event *__event = (struct lttng_event *) __tp_data;
 	struct lttng_channel *__chan = __event->chan;
