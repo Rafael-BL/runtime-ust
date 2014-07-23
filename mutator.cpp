@@ -226,8 +226,12 @@ int main (int argc, const char* argv[])
 
 	std::vector<BPatch_snippet *> call_sequence;
 
-	BUCHE("\tInitialize ctx datastruct in the mutatee");
+	BUCHE("\tAllocate ctx data struct. in the mutatee");
+	BPatch_variableExpr *ctxExpr = handle->malloc(sizeof(struct lttng_ust_lib_ring_buffer_ctx));
+
+	BUCHE("\tInitialize ctx data struct. in the mutatee");
 	image->findFunction("init_ctx", init_ctx_fct);
+	args.push_back(new BPatch_constExpr(ctxExpr->getBaseAddr()));
 	args.push_back(new BPatch_constExpr(tpExpr->getBaseAddr()));
 	args.push_back(new BPatch_constExpr( __event_len ));
 	BPatch_funcCallExpr init_ctx_fct_call(*(init_ctx_fct[0]), args);
@@ -239,6 +243,7 @@ int main (int argc, const char* argv[])
 	for(int i = 0 ; i < nb_field ; ++i)
 	{
 		BUCHE("\t\tAdd call expr for param. %d named \"%s\"", i, (*params)[i]->getName());
+		args.push_back(new BPatch_constExpr(ctxExpr->getBaseAddr()));
 		args.push_back(new BPatch_constExpr(tpExpr->getBaseAddr()));
 		args.push_back(new BPatch_constExpr( __event_len ));
 		args.push_back(new BPatch_paramExpr(i));
@@ -251,6 +256,7 @@ int main (int argc, const char* argv[])
 
 	//Find function that commits the event
 	BUCHE("\tCall the event commit function");
+	args.push_back(new BPatch_constExpr(ctxExpr->getBaseAddr()));
 	args.push_back(new BPatch_constExpr(tpExpr->getBaseAddr()));
 	image->findFunction("event_commit", commit_fct);
 	BPatch_funcCallExpr event_commit_call(*(commit_fct[0]), args);
