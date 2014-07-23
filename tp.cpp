@@ -10,7 +10,7 @@
 void fake_probe(struct lttng_event* __tp_data)
 {}
 
-void tp_int(struct tracepoint *t,int event_len, int value )
+void tp_int(struct tracepoint *t, int event_len, int value )
 {
 	void *__tp_data = t->probes->data;
 	struct lttng_event *__event = (struct lttng_event *) __tp_data;
@@ -32,8 +32,48 @@ void tp_int(struct tracepoint *t,int event_len, int value )
 	__chan->ops->event_commit(&__ctx);
 }
 
-void read_str(char *str)
+static struct lttng_ust_lib_ring_buffer_ctx static_ctx;
+
+void init_ctx(struct tracepoint *t, int event_len)
 {
-	BUCHE("read_str");
-	printf("%p: %s\n", (char*)str, (char *) str);
+	void *__tp_data = t->probes->data;
+	struct lttng_event *__event = (struct lttng_event *) __tp_data;
+	struct lttng_channel *__chan = __event->chan;
+	size_t __event_align;
+
+	__event_align = 0;
+	lib_ring_buffer_ctx_init(&static_ctx, __chan->chan, __event, event_len,
+			__event_align, -1, __chan->handle);
+	static_ctx.ip = __builtin_return_address(0);
+	__chan->ops->event_reserve(&static_ctx, __event->id);
+}
+
+void event_write_int( struct tracepoint *t, int event_len, int value)
+{
+	void *__tp_data = t->probes->data;
+	struct lttng_event *__event = (struct lttng_event *) __tp_data;
+	struct lttng_channel *__chan = __event->chan;
+
+	__chan->ops->event_write(&static_ctx, &value, sizeof(int));
+	lib_ring_buffer_align(event_len, lttng_alignof(int));
+}
+
+void event_write_char( struct tracepoint *t, int event_len, char value)
+{
+	void *__tp_data = t->probes->data;
+	struct lttng_event *__event = (struct lttng_event *) __tp_data;
+	struct lttng_channel *__chan = __event->chan;
+
+	__chan->ops->event_write(&static_ctx, &value, sizeof(char));
+	lib_ring_buffer_align(event_len, lttng_alignof(char));
+}
+
+void event_commit( struct tracepoint *t)
+{
+
+	void *__tp_data = t->probes->data;
+	struct lttng_event *__event = (struct lttng_event *) __tp_data;
+	struct lttng_channel *__chan = __event->chan;
+
+	__chan->ops->event_commit(&static_ctx);
 }

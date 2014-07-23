@@ -17,6 +17,11 @@ void awesome(char *a, char *b)
 	return;
 }
 
+void toronto(int a, int b, char c, int d)
+{
+	printf("%s, %d, %d, %c, %d\n", __func__, a, b, c, d);
+	return;
+}
 void quebec(int a)
 {
 	printf("%s, %d\n", __func__, a);
@@ -43,7 +48,8 @@ int main()
 		//print(1337, 86,'c', "Hello World",&var );
 		sleep(1);
 		getAnswer(18, 'a');
-		quebec(18);
+		//quebec(18);
+		toronto(18, 1337, 'M', -1000);
 		awesome("Good Morning", "Good Night");
 		beauce(24,"Life is like a box of chocolate");
 		montreal(24,"Life is like a box of chocolate", 'p');

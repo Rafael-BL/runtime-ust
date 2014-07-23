@@ -84,16 +84,17 @@ int main (int argc, const char* argv[])
 	bpatch.setDelayedParsing(true);
 
 	//BPatch_process *handle = bpatch.processCreate("./mutatee", NULL );
+	BUCHE("Fork the mutatee process");
 	int mutateePid = fork();
 
     	if(mutateePid == 0)
     	{
 		char *args[4] = {NULL};
 		char *envs[3] = {NULL};
-		//args[0] = (char *) "env";
+		args[0] = (char *) "./mutatee";
+
 		envs[0] = (char *) "LD_PRELOAD=/usr/local/lib/liblttng-ust.so";
 		envs[1] = (char *) "HOME=/home/frdeso";
-		args[0] = (char *) "./mutatee";
 		execve("./mutatee", args, envs);
     	}
 
@@ -107,8 +108,8 @@ int main (int argc, const char* argv[])
 	handle->stopExecution();
 
 	BPatch_image *image = handle->getImage();
-	vector<BPatch_function*> functions, tp_function;
-	image->findFunction("quebec", functions);
+	vector<BPatch_function*> functions, tp_function, field_fct;
+	image->findFunction("toronto", functions);
 
 	vector<BPatch_localVar *> *params = functions[0]->getParams();
 	int nb_field = params->size();
@@ -162,12 +163,14 @@ int main (int argc, const char* argv[])
 					add_char_event_field(&event_fields[i],(char *) fieldNameExpr->getBaseAddr());
 					__event_len += lib_ring_buffer_align(__event_len, lttng_alignof(char));
 					__event_len += sizeof(char);
+					image->findFunction("event_write_char", field_fct);
 				}
 				else
 				{
 					add_int_event_field(&event_fields[i],(char *) fieldNameExpr->getBaseAddr());
 					__event_len += lib_ring_buffer_align(__event_len, lttng_alignof(int));
 					__event_len += sizeof(int);
+					image->findFunction("event_write_int", field_fct);
 				}
 				break;
 			}
@@ -216,23 +219,46 @@ int main (int argc, const char* argv[])
 
 	BUCHE("Preparing arguments for tracepoint calling");
 	std::vector<BPatch_snippet *> args;
+	std::vector<BPatch_function *> init_ctx_fct, commit_fct;
+
+	std::vector<BPatch_snippet *> call_sequence;
+
+	BUCHE("\tInitialize ctx datastruct in the mutatee");
+	image->findFunction("init_ctx", init_ctx_fct);
 	args.push_back(new BPatch_constExpr(tpExpr->getBaseAddr()));
-	args.push_back(new BPatch_constExpr( __event_len));
+	args.push_back(new BPatch_constExpr( __event_len ));
+	BPatch_funcCallExpr init_ctx_fct_call(*(init_ctx_fct[0]), args);
+	call_sequence.push_back(&init_ctx_fct_call);
+	
+	args.clear();
+	BUCHE("\tIterate on every params and prepare the field write call expr");
+
 	for(int i = 0 ; i < nb_field ; ++i)
 	{
+		args.push_back(new BPatch_constExpr(tpExpr->getBaseAddr()));
+		args.push_back(new BPatch_constExpr( __event_len ));
 		args.push_back(new BPatch_paramExpr(i));
+		BPatch_funcCallExpr *field_call = new BPatch_funcCallExpr(*(field_fct[i]), args);
+		call_sequence.push_back(field_call);
+
+		field_fct.clear();
+		args.clear();
 	}
 
 	//Find function that commits the event
-	image->findFunction("tp_int", tp_function);
-	BPatch_funcCallExpr tp_call(*(tp_function[0]), args);
+	BUCHE("\tCall the event commit function");
+	args.push_back(new BPatch_constExpr(tpExpr->getBaseAddr()));
+	image->findFunction("event_commit", commit_fct);
+	BPatch_funcCallExpr event_commit_call(*(commit_fct[0]), args);
+	call_sequence.push_back(&event_commit_call);
 	vector<BPatch_point*> * points = functions[0]->findPoint(BPatch_entry);
+
 	BUCHE("Add tracepoint point function call in the mutatee");
-	handle->insertSnippet(tp_call, points[0]);
+	handle->insertSnippet(BPatch_sequence(call_sequence), points[0]);
 
 	if(handle->isStopped())
 	{
-		BUCHE("Continuing mutatee...");
+		BUCHE("Continuing mutatee's execution...");
 		handle->continueExecution();
 	}
 	if(handle->isTerminated())
