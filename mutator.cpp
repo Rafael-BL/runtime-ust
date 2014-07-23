@@ -12,7 +12,7 @@
 #include <BPatch_function.h>
 #include <BPatch_point.h>
 
-#include "../buche/buche.h"
+#include "buche/buche.h"
 #define MAX_STR_LEN 20
 #define TARGETED_FCT "toronto"
 extern "C" int tracepoint_register_lib(struct tracepoint * const *tracepoints_start, int nb);
