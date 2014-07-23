@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <unistd.h>
-#include "../buche/buche.h"
+#include "buche/buche.h"
 
 void print(int a, short b,char c, char *d, int *e)
 {

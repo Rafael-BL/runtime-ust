@@ -5,7 +5,7 @@
 #include <BPatch.h>
 #include <BPatch_function.h>
 
-#include "../buche/buche.h"
+#include "buche/buche.h"
 
 void fake_probe(struct lttng_event* __tp_data)
 {}
