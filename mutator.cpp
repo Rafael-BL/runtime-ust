@@ -13,7 +13,8 @@
 #include <BPatch_point.h>
 
 #include "../buche/buche.h"
-#define MAX_STR_LEN 10
+#define MAX_STR_LEN 20
+#define TARGETED_FCT "toronto"
 extern "C" int tracepoint_register_lib(struct tracepoint * const *tracepoints_start, int nb);
 
 extern "C" {
@@ -109,18 +110,20 @@ int main (int argc, const char* argv[])
 
 	BPatch_image *image = handle->getImage();
 	vector<BPatch_function*> functions, tp_function, field_fct;
-	image->findFunction("toronto", functions);
+
+	BUCHE("Looking for \"%s\" function in the mutatee addr. space", TARGETED_FCT)
+	image->findFunction(TARGETED_FCT, functions);
 
 	vector<BPatch_localVar *> *params = functions[0]->getParams();
 	int nb_field = params->size();
 
 	/*TODO:Move to binary through instrumentation  */
 	BPatch_variableExpr *nameExpr = handle->malloc(sizeof(char) * MAX_STR_LEN);
-	char nameArr[MAX_STR_LEN] = "p:event";
+	char nameArr[MAX_STR_LEN] = "p:event_" TARGETED_FCT;
 	nameExpr->writeValue((char*)nameArr, MAX_STR_LEN, false);
 
 	BPatch_variableExpr *signExpr = handle->malloc(sizeof(char) * MAX_STR_LEN);
-	char signArr[MAX_STR_LEN] = "event";
+	char signArr[MAX_STR_LEN] = "event_" TARGETED_FCT;
 	signExpr->writeValue((char *)signArr, MAX_STR_LEN, false);
 
 	BPatch_variableExpr *prvdrExpr = handle->malloc(sizeof(char) * MAX_STR_LEN);

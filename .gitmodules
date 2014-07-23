@@ -1,0 +1,3 @@
+[submodule "buche"]
+	path = buche
+	url = https://github.com/frdeso/buche
