@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <unistd.h>
+#include "../buche/buche.h"
 
 void print(int a, short b,char c, char *d, int *e)
 {
@@ -18,6 +19,7 @@ void awesome(char *a, char *b)
 
 void quebec(int a)
 {
+	printf("%s, %d\n", __func__, a);
 	return;
 }
 void beauce(int a, char *b)
@@ -32,8 +34,10 @@ void sherbrook(int a, char *b, char c, void *d)
 {
 	return;
 }
+
 int main()
 {
+	BUCHE("allo");
 	int i, var = 18;
 	for(i = 0; i < 5; ++i)
 	{
