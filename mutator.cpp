@@ -131,7 +131,7 @@ int main (int argc, const char* argv[])
 	prvdrExpr->writeValue((char*)provArr, MAX_STR_LEN, false);
 
 	//Tracepoint
-	struct tracepoint t2= {
+	struct tracepoint t= {
 		.name =(const char*) nameExpr->getBaseAddr(), //Does this work?
 		.state = 0,
 		.probes = NULL,
@@ -140,7 +140,7 @@ int main (int argc, const char* argv[])
 	};
 
 	BPatch_variableExpr *tpExpr = handle->malloc(sizeof(struct tracepoint));
-	tpExpr->writeValue((void *)&t2, sizeof(struct tracepoint), false);
+	tpExpr->writeValue((void *) &t, sizeof(struct tracepoint), false);
 
 	register_tp_from_mutatee(handle, tpExpr);
 
@@ -187,7 +187,7 @@ int main (int argc, const char* argv[])
 	event_fieldsExpr->writeValue(event_fields, sizeof(struct lttng_event_field)*nb_field, false);
 
 	//Event description
-	struct lttng_event_desc event_desc_1 = {
+	struct lttng_event_desc event_desc = {
 		.name = (const char*) nameExpr->getBaseAddr(),
 		.probe_callback = (void (*)()) 1337, //FIXME: must set the probe callback to none null value but is not used
 		.ctx = NULL,
@@ -198,7 +198,7 @@ int main (int argc, const char* argv[])
 	};
 
 	BPatch_variableExpr *event_descExpr = handle->malloc(sizeof(struct lttng_event_desc));
-	event_descExpr->writeValue(&event_desc_1, sizeof(struct lttng_event_desc), false);
+	event_descExpr->writeValue(&event_desc, sizeof(struct lttng_event_desc), false);
 
 	BPatch_variableExpr *event_descArrayExpr = handle->malloc(sizeof(struct lttng_event_desc*));
 	unsigned long addr =(unsigned long) event_descExpr->getBaseAddr();
