@@ -35,8 +35,12 @@ void tp_int(struct tracepoint *t, int event_len, int value )
 //static struct lttng_ust_lib_ring_buffer_ctx static_ctx;
 
 void init_ctx( struct lttng_ust_lib_ring_buffer_ctx *static_ctx, 
-			struct tracepoint *t, int event_len)
+			struct tracepoint *t, int event_len, int isEnable)
 {
+	if(!isEnable)
+	{
+		return;
+	}
 	void *__tp_data = t->probes->data;
 	struct lttng_event *__event = (struct lttng_event *) __tp_data;
 	struct lttng_channel *__chan = __event->chan;
@@ -50,8 +54,12 @@ void init_ctx( struct lttng_ust_lib_ring_buffer_ctx *static_ctx,
 }
 
 void event_write_int( struct lttng_ust_lib_ring_buffer_ctx *static_ctx,
-			struct tracepoint *t, int event_len, int value)
+			struct tracepoint *t, int event_len, int value, int isEnable)
 {
+	if(!isEnable)
+	{
+		return;
+	}
 	void *__tp_data = t->probes->data;
 	struct lttng_event *__event = (struct lttng_event *) __tp_data;
 	struct lttng_channel *__chan = __event->chan;
@@ -61,8 +69,12 @@ void event_write_int( struct lttng_ust_lib_ring_buffer_ctx *static_ctx,
 }
 
 void event_write_char( struct lttng_ust_lib_ring_buffer_ctx *static_ctx,
-			struct tracepoint *t, int event_len, char value)
+			struct tracepoint *t, int event_len, char value, int isEnable)
 {
+	if(!isEnable)
+	{
+		return;
+	}
 	void *__tp_data = t->probes->data;
 	struct lttng_event *__event = (struct lttng_event *) __tp_data;
 	struct lttng_channel *__chan = __event->chan;
@@ -72,8 +84,12 @@ void event_write_char( struct lttng_ust_lib_ring_buffer_ctx *static_ctx,
 }
 
 void event_commit( struct lttng_ust_lib_ring_buffer_ctx *static_ctx,
-			struct tracepoint *t)
+			struct tracepoint *t, int isEnable)
 {
+	if(!isEnable)
+	{
+		return;
+	}
 
 	void *__tp_data = t->probes->data;
 	struct lttng_event *__event = (struct lttng_event *) __tp_data;

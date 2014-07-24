@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include "buche/buche.h"
+#include "sem.h"
 
 void print(int a, short b,char c, char *d, int *e)
 {
@@ -39,16 +40,25 @@ void sherbrook(int a, char *b, char c, void *d)
 {
 	return;
 }
+void fake_call()
+{}
 
 int main()
 {
 	int i, var = 18;
+	sem_t *sem = sem_open(SNAME, O_CREAT, 0644, 0);
+	sleep(1);
+	sem_post(sem);
+
+	sleep(1);	
+	sem_wait(sem);
+	fake_call();
 	for(i = 0; i < 5; ++i)
 	{
 		//print(1337, 86,'c', "Hello World",&var );
 		sleep(1);
 		getAnswer(18, 'a');
-		//quebec(18);
+		quebec(18);
 		toronto(18, 1337, 'M', -1000);
 		awesome("Good Morning", "Good Night");
 		beauce(24,"Life is like a box of chocolate");

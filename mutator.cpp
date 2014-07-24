@@ -13,6 +13,7 @@
 #include <BPatch_point.h>
 
 #include "buche/buche.h"
+#include "sem.h"
 #define MAX_STR_LEN 20
 #define TARGETED_FCT "toronto"
 extern "C" int tracepoint_register_lib(struct tracepoint * const *tracepoints_start, int nb);
@@ -51,31 +52,46 @@ extern "C" {
 	}
 }
 using namespace std;
-void register_tp_from_mutatee(BPatch_process *handle, BPatch_variableExpr *tp)
+void register_tp_from_mutatee(BPatch_process *handle, BPatch_variableExpr *tp, vector<BPatch_snippet *> *seq)
 {
 	BUCHE("Registering tracepoint from mutatee");
-	vector<BPatch_function*> functions;
+	vector<BPatch_function*> functions, fake_function;
 	BPatch_image *image = handle->getImage();
 	std::vector<BPatch_snippet *> args;
 
 	image->findFunction("tracepoint_register", functions);
 
 	args.push_back(new BPatch_constExpr( tp->getBaseAddr()));
-	BPatch_funcCallExpr tp_register_lib_call(*functions[0], args);
-	handle->oneTimeCode(tp_register_lib_call);
+	BPatch_funcCallExpr* tp_register_lib_call =  new BPatch_funcCallExpr(*functions[0], args);
+	seq->push_back(tp_register_lib_call);
 }
-void probe_register_from_mutatee(BPatch_process *handle, BPatch_variableExpr *probe)
+void probe_register_from_mutatee(BPatch_process *handle, BPatch_variableExpr *probe, vector<BPatch_snippet *> *seq)
 {
 	BUCHE("Registering probe from mutatee");
-	vector<BPatch_function*> functions;
+	vector<BPatch_function*> functions , fake_function;
 	BPatch_image *image = handle->getImage();
 	std::vector<BPatch_snippet *> args;
 
 	image->findFunction("lttng_probe_register", functions);
 
 	args.push_back(new BPatch_constExpr( probe->getBaseAddr()));
-	BPatch_funcCallExpr probe_register_call(*functions[0], args);
-	handle->oneTimeCodeAsync(probe_register_call);
+	BPatch_funcCallExpr* tp_register_lib_call =  new BPatch_funcCallExpr(*functions[0], args);
+	seq->push_back(tp_register_lib_call);
+}
+
+void complete_registration(BPatch_process *handle, vector<BPatch_snippet*> *seq ,BPatch_variableExpr *isRegistered)
+{
+	BUCHE("Turn the enable flag ON so the tracepoint is actived");
+	BPatch_arithExpr completed(BPatch_assign, *isRegistered, 
+			BPatch_arithExpr(BPatch_plus, *isRegistered, BPatch_constExpr(1)));
+	
+	seq->push_back(&completed);
+
+	vector<BPatch_function*> fake_function;
+	BPatch_image *image = handle->getImage();
+	image->findFunction("fake_call", fake_function);
+	BUCHE("Insert the sequence of registration calls and the flag enabling at the fake function location");
+	handle->insertSnippet(BPatch_sequence(*seq), fake_function[0]->findPoint(BPatch_entry)[0]);
 }
 
 int main (int argc, const char* argv[])
@@ -93,13 +109,16 @@ int main (int argc, const char* argv[])
 		char *args[4] = {NULL};
 		char *envs[3] = {NULL};
 		args[0] = (char *) "./mutatee";
-
 		envs[0] = (char *) "LD_PRELOAD=/usr/local/lib/liblttng-ust.so";
 		envs[1] = (char *) "HOME=/home/frdeso";
 		execve("./mutatee", args, envs);
     	}
 
     	sleep(1);
+    	sem_t *sem = sem_open(SNAME, 0);
+
+	BUCHE("Wait for the semaphore to be posted by mutatee");
+	sem_wait(sem);
 	BUCHE("Attaching to the mutatee process");
     	BPatch_process *handle = bpatch.processAttach(NULL, mutateePid);
 
@@ -116,6 +135,8 @@ int main (int argc, const char* argv[])
 
 	vector<BPatch_localVar *> *params = functions[0]->getParams();
 	int nb_field = params->size();
+
+	BPatch_variableExpr *isRegistered = handle->malloc(*(image->findType("int")));
 
 	/*TODO:Move to binary through instrumentation  */
 	BPatch_variableExpr *nameExpr = handle->malloc(sizeof(char) * MAX_STR_LEN);
@@ -139,10 +160,11 @@ int main (int argc, const char* argv[])
 		.signature =(const char*) signExpr->getBaseAddr(),//Does this work?
 	};
 
+	vector<BPatch_snippet *> register_call_sequence;
 	BPatch_variableExpr *tpExpr = handle->malloc(sizeof(struct tracepoint));
 	tpExpr->writeValue((void *) &t, sizeof(struct tracepoint), false);
 
-	register_tp_from_mutatee(handle, tpExpr);
+	register_tp_from_mutatee(handle, tpExpr, &register_call_sequence);
 
 	//Event fields
 	struct lttng_event_field *event_fields = (struct lttng_event_field* ) malloc(sizeof(struct lttng_event_field)*nb_field);
@@ -218,7 +240,9 @@ int main (int argc, const char* argv[])
 	BPatch_variableExpr *probe_descExpr = handle->malloc(sizeof(struct lttng_probe_desc));
 	probe_descExpr->writeValue(&desc, sizeof(struct lttng_probe_desc), false);
 
-	probe_register_from_mutatee(handle, probe_descExpr);
+	probe_register_from_mutatee(handle, probe_descExpr, &register_call_sequence);
+
+	complete_registration(handle, &register_call_sequence, isRegistered);
 
 	BUCHE("Preparing arguments for tracepoint calling");
 	std::vector<BPatch_snippet *> args;
@@ -234,6 +258,7 @@ int main (int argc, const char* argv[])
 	args.push_back(new BPatch_constExpr(ctxExpr->getBaseAddr()));
 	args.push_back(new BPatch_constExpr(tpExpr->getBaseAddr()));
 	args.push_back(new BPatch_constExpr( __event_len ));
+	args.push_back(isRegistered);
 	BPatch_funcCallExpr init_ctx_fct_call(*(init_ctx_fct[0]), args);
 	call_sequence.push_back(&init_ctx_fct_call);
 
@@ -247,6 +272,7 @@ int main (int argc, const char* argv[])
 		args.push_back(new BPatch_constExpr(tpExpr->getBaseAddr()));
 		args.push_back(new BPatch_constExpr( __event_len ));
 		args.push_back(new BPatch_paramExpr(i));
+		args.push_back(isRegistered);
 		BPatch_funcCallExpr *field_call = new BPatch_funcCallExpr(*(field_fct[i]), args);
 		call_sequence.push_back(field_call);
 
@@ -258,6 +284,7 @@ int main (int argc, const char* argv[])
 	BUCHE("\tCall the event commit function");
 	args.push_back(new BPatch_constExpr(ctxExpr->getBaseAddr()));
 	args.push_back(new BPatch_constExpr(tpExpr->getBaseAddr()));
+	args.push_back(isRegistered);
 	image->findFunction("event_commit", commit_fct);
 	BPatch_funcCallExpr event_commit_call(*(commit_fct[0]), args);
 	call_sequence.push_back(&event_commit_call);
@@ -266,6 +293,7 @@ int main (int argc, const char* argv[])
 	BUCHE("Add tracepoint point function call in the mutatee");
 	handle->insertSnippet(BPatch_sequence(call_sequence), points[0]);
 
+	sem_post(sem);
 	if(handle->isStopped())
 	{
 		BUCHE("Continuing mutatee's execution...");

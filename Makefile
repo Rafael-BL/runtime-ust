@@ -3,9 +3,9 @@ CFLAGS= -g -O0 -Wall
 all: mutator mutatee tp.so
 
 mutator: mutator.cpp 
-	g++ $(CFLAGS)  $^ -llttng-ust -llttng-ust-tracepoint -ldyninstAPI -o $@
+	g++ $(CFLAGS)  $^ -llttng-ust -lpthread -llttng-ust-tracepoint -ldyninstAPI -o $@
 mutatee: mutatee.c
-	gcc $(CFLAGS) $^ -o $@
+	gcc $(CFLAGS) $^ -lpthread -o $@
 tp.so: tp.o
 	g++ -shared  -fPIC -DPIC $^ -ldl -llttng-ust -o $@
 
