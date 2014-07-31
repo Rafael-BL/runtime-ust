@@ -15,7 +15,7 @@
 #include "buche/buche.h"
 #include "sem.h"
 #define MAX_STR_LEN 20
-#define TARGETED_FCT "toronto"
+#define TARGETED_FCT "montreal"
 extern "C" int tracepoint_register_lib(struct tracepoint * const *tracepoints_start, int nb);
 
 extern "C" {
@@ -44,13 +44,35 @@ extern "C" {
 	{
 		struct lttng_event_field f = {
 			.name = name,
-			.type = __type_integer(char, LITTLE_ENDIAN, 10, none),
+			.type = __type_integer(char, LITTLE_ENDIAN, 10, ASCII),
 			.nowrite = 0
 		};
 
 		memcpy(field, &f, sizeof(struct lttng_event_field));
 	}
+
+	void add_char_ptr_event_field( struct lttng_event_field *field, char *name)
+	{
+		struct lttng_event_field f = {
+		.name = name,
+		.type = {
+		  	.atype = atype_sequence,
+		  		.u =
+		  		{
+		  			.sequence =
+		  			{
+		  				.length_type = __type_integer(unsigned int, LITTLE_ENDIAN, 10, none),
+		  				.elem_type = __type_integer(char, LITTLE_ENDIAN, 10, UTF8),
+		  			},
+		  		},
+		},
+		.nowrite = 0,
+
+		};
+		memcpy(field, &f, sizeof(struct lttng_event_field));
+	}
 }
+
 using namespace std;
 void register_tp_from_mutatee(BPatch_process *handle, BPatch_variableExpr *tp, vector<BPatch_snippet *> *seq)
 {
@@ -128,7 +150,7 @@ int main (int argc, const char* argv[])
 	handle->stopExecution();
 
 	BPatch_image *image = handle->getImage();
-	vector<BPatch_function*> functions, tp_function, field_fct;
+	vector<BPatch_function*> functions, tp_function, field_fct, len_fct;
 
 	BUCHE("Looking for \"%s\" function in the mutatee addr. space", TARGETED_FCT)
 	image->findFunction(TARGETED_FCT, functions);
@@ -189,14 +211,33 @@ int main (int argc, const char* argv[])
 					__event_len += lib_ring_buffer_align(__event_len, lttng_alignof(char));
 					__event_len += sizeof(char);
 					image->findFunction("event_write_char", field_fct);
+					image->findFunction("update_event_len_char", len_fct);
 				}
-				else
+				else if (typeName == "int")
 				{
 					add_int_event_field(&event_fields[i],(char *) fieldNameExpr->getBaseAddr());
 					__event_len += lib_ring_buffer_align(__event_len, lttng_alignof(int));
 					__event_len += sizeof(int);
 					image->findFunction("event_write_int", field_fct);
+					image->findFunction("update_event_len_int", len_fct);
 				}
+				else if (typeName == "float")
+				{
+					add_float_event_field(&event_fields[i],(char *) fieldNameExpr->getBaseAddr());
+					__event_len += lib_ring_buffer_align(__event_len, lttng_alignof(float));
+					__event_len += sizeof(float);
+					image->findFunction("event_write_float", field_fct);
+				}
+				break;
+			}
+			case BPatch_dataPointer:
+			{
+				add_char_ptr_event_field(&event_fields[i],(char *) fieldNameExpr->getBaseAddr());
+				__event_len += lib_ring_buffer_align(__event_len, lttng_alignof(char));
+				__event_len += sizeof(char)* 40;
+				image->findFunction("event_write_char_ptr", field_fct);
+				image->findFunction("update_event_len_char_ptr", len_fct);
+
 				break;
 			}
 			default:
@@ -246,9 +287,26 @@ int main (int argc, const char* argv[])
 
 	BUCHE("Preparing arguments for tracepoint calling");
 	std::vector<BPatch_snippet *> args;
+	std::vector<BPatch_snippet *> call_sequence;
 	std::vector<BPatch_function *> init_ctx_fct, commit_fct;
 
-	std::vector<BPatch_snippet *> call_sequence;
+	BPatch_variableExpr *entry_event_len_expr = handle->malloc(*(image->findType("unsigned int")));
+	BUCHE("Setting event len to 0");
+	BPatch_arithExpr event_len_init(BPatch_assign, *entry_event_len_expr,  BPatch_constExpr(0));
+	call_sequence.push_back(&event_len_init);
+	BUCHE("Adding size of each parameter to event len");
+	for(int i = 0 ; i < nb_field ; ++i)
+	{
+		args.push_back(new BPatch_constExpr(entry_event_len_expr->getBaseAddr()));
+		args.push_back(new BPatch_paramExpr(i));
+		args.push_back(isRegistered);
+		BPatch_funcCallExpr *field_call = new BPatch_funcCallExpr(*(len_fct[i]), args);
+		call_sequence.push_back(field_call);
+
+		field_fct.clear();
+		args.clear();
+	}
+
 
 	BUCHE("\tAllocate ctx data struct. in the mutatee");
 	BPatch_variableExpr *ctxExpr = handle->malloc(sizeof(struct lttng_ust_lib_ring_buffer_ctx));
@@ -257,7 +315,7 @@ int main (int argc, const char* argv[])
 	image->findFunction("init_ctx", init_ctx_fct);
 	args.push_back(new BPatch_constExpr(ctxExpr->getBaseAddr()));
 	args.push_back(new BPatch_constExpr(tpExpr->getBaseAddr()));
-	args.push_back(new BPatch_constExpr( __event_len ));
+	args.push_back(new BPatch_constExpr(entry_event_len_expr->getBaseAddr() ));
 	args.push_back(isRegistered);
 	BPatch_funcCallExpr init_ctx_fct_call(*(init_ctx_fct[0]), args);
 	call_sequence.push_back(&init_ctx_fct_call);
@@ -270,7 +328,7 @@ int main (int argc, const char* argv[])
 		BUCHE("\t\tAdd call expr for param. %d named \"%s\"", i, (*params)[i]->getName());
 		args.push_back(new BPatch_constExpr(ctxExpr->getBaseAddr()));
 		args.push_back(new BPatch_constExpr(tpExpr->getBaseAddr()));
-		args.push_back(new BPatch_constExpr( __event_len ));
+		args.push_back(new BPatch_constExpr( entry_event_len_expr->getBaseAddr()));
 		args.push_back(new BPatch_paramExpr(i));
 		args.push_back(isRegistered);
 		BPatch_funcCallExpr *field_call = new BPatch_funcCallExpr(*(field_fct[i]), args);

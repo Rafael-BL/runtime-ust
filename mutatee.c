@@ -28,6 +28,11 @@ void quebec(int a)
 	printf("%s, %d\n", __func__, a);
 	return;
 }
+void rimouski(int a, float b)
+{
+	return;
+}
+
 void beauce(int a, char *b)
 {
 	return;
@@ -60,6 +65,7 @@ int main()
 		getAnswer(18, 'a');
 		quebec(18);
 		toronto(18, 1337, 'M', -1000);
+		rimouski(12, 0.12f);
 		awesome("Good Morning", "Good Night");
 		beauce(24,"Life is like a box of chocolate");
 		montreal(24,"Life is like a box of chocolate", 'p');

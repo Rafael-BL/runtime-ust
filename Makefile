@@ -18,7 +18,7 @@ run: all
 	lttng create
 	lttng enable-event -a -u
 	lttng start
-	env DYNINSTAPI_RT_LIB=/usr/lib/libdyninstAPI_RT.so ./mutator
+	env LTTNG_UST_WITHOUT_BADDR_STATEDUMP=1 DYNINSTAPI_RT_LIB=/usr/lib/libdyninstAPI_RT.so ./mutator
 	lttng stop
 	lttng view
 	lttng destroy
